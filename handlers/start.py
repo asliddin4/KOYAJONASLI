@@ -235,7 +235,7 @@ async def premium_menu(callback: CallbackQuery):
 • 📈 Kengaytirilgan statistika"""
         
         premium_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🤖 AI Suhbat", callback_data="conversation")],
+            [InlineKeyboardButton(text="🤖 AI Suhbat", callback_data="ai_conversation")],
             [InlineKeyboardButton(text="👥 Referral dasturi", callback_data="referral_program")],
             [InlineKeyboardButton(text="📊 Statistika", callback_data="rating")],
             [InlineKeyboardButton(text="🔙 Orqaga", callback_data="main_menu")]
@@ -328,6 +328,7 @@ async def handle_referral_program(callback: CallbackQuery):
     
     await callback.answer()
 
+# Minimal handlers for other callbacks
 @router.callback_query(F.data == "copy_referral_link")
 async def handle_copy_referral_link(callback: CallbackQuery):
     """Referral havolasini ko'rsatish"""
@@ -517,7 +518,7 @@ Har yangi referral sizni premium mukofotga yaqinlashtiradi!"""
     
     await callback.answer()
 
-@router.callback_query(F.data == "premium_purchase")
+@router.callback_query(F.data.startswith("premium_purchase"))
 async def handle_premium_purchase(callback: CallbackQuery):
     if not callback.message or not callback.from_user:
         await callback.answer("Xatolik!")
@@ -575,19 +576,19 @@ Janubiy Koreya, Seul/Inchon
     
     await callback.answer()
 
-@router.callback_query(F.data == "copy_card_info")
+@router.callback_query(F.data.startswith("copy_card_info"))
 async def handle_copy_card_info(callback: CallbackQuery):
     await callback.answer("💳 Karta ma'lumoti nusxalandi:\n4278 3100 2775 4068\nXoshimjon Mamadiyev", show_alert=True)
 
-@router.callback_query(F.data == "copy_click_number")
+@router.callback_query(F.data.startswith("copy_click_number"))
 async def handle_copy_click_number(callback: CallbackQuery):
     await callback.answer("📱 Click/Payme raqam nusxalandi:\n+998917754441", show_alert=True)
 
-@router.callback_query(F.data == "copy_humo_number")
+@router.callback_query(F.data.startswith("copy_humo_number"))
 async def handle_copy_humo_number(callback: CallbackQuery):
     await callback.answer("💸 Humo/Uzcard raqam nusxalandi:\n8600 4954 7441 7777", show_alert=True)
 
-@router.callback_query(F.data == "send_payment_proof")
+@router.callback_query(F.data.startswith("send_payment_proof"))
 async def handle_send_payment_proof(callback: CallbackQuery):
     if not callback.message or not callback.from_user:
         await callback.answer("Xatolik!")
@@ -600,60 +601,208 @@ async def handle_send_payment_proof(callback: CallbackQuery):
 2. @Chang_chi_won admin ga yuboring
 3. Username va ID ni ham yuboring
 
-⏰ <b>Qayta ishlash vaqti:</b>
-• Oddiy holatlarda: 1-24 soat
-• Dam kunlari: 48 soat gacha
+👤 <b>Sizning ma'lumotlaringiz:</b>
+• ID: <code>{}</code>
+• Username: @{}
 
-✅ <b>Tasdiqlangandan keyin:</b>
-• Premium faollashadi
-• Barcha premium funksiyalar ochiladi
-• Tasdiqnoma xabari keladi"""
-    
-    proof_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="👨‍💼 Admin bilan bog'lanish", url="https://t.me/Chang_chi_won")],
-        [InlineKeyboardButton(text="🔙 To'lov", callback_data="premium_purchase")]
-    ])
-    
+⏰ <b>Tasdiqlash vaqti:</b> 1-24 soat
+
+✅ <b>Tasdiqlangandan keyin Premium avtomatik faollashadi!</b>"""
+
     try:
         await callback.message.edit_text(
-            proof_text,
-            reply_markup=proof_keyboard,
+            proof_text.format(callback.from_user.id, callback.from_user.username or "none"),
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="👨‍💼 Admin ga yozish", url="https://t.me/Chang_chi_won")],
+                [InlineKeyboardButton(text="🔙 Orqaga", callback_data="premium_purchase")]
+            ]),
             parse_mode="HTML"
         )
     except Exception as e:
-        print(f"Error editing payment proof message: {e}")
+        print(f"Error showing payment proof info: {e}")
     
     await callback.answer()
 
-@router.callback_query(F.data == "referral_info")
+@router.callback_query(F.data.startswith("referral_info"))
 async def handle_referral_info(callback: CallbackQuery):
+    await callback.answer("ℹ️ Ma'lumot yuklanmoqda...")
+
+@router.callback_query(F.data.startswith("rating"))
+async def handle_rating(callback: CallbackQuery):
     if not callback.message or not callback.from_user:
         await callback.answer("Xatolik!")
         return
         
     user_id = callback.from_user.id
     user_stats = await get_user_stats(user_id)
-    referral_count = user_stats[5] if user_stats and len(user_stats) > 5 else 0
-    remaining_referrals = max(0, 10 - referral_count)
     
-    info_text = f"""ℹ️ <b>REFERRAL DASTURI MA'LUMOT</b>
+    if not user_stats:
+        await callback.answer("❌ Foydalanuvchi ma'lumotlari topilmadi!")
+        return
+    
+    try:
+        # Show user statistics
+        rating, total_sessions, words_learned = user_stats[1], user_stats[2], user_stats[3]
+        is_premium = user_stats[4] if len(user_stats) > 4 else False
+        referral_count = user_stats[5] if len(user_stats) > 5 else 0
+        
+        stats_text = f"""📊 <b>SIZNING STATISTIKANGIZ</b>
 
-💰 <b>QIYMAT HISOB-KITOBI:</b>
-• Premium narx: 50,000 som/oy  
-• 10 referral = BEPUL 1 oy
-• Sizning tejashingiz: 50,000 som!
+🌟 <b>Reyting:</b> {rating} ball
+📚 <b>Sessiyalar:</b> {total_sessions} ta
+📖 <b>O'rganilgan so'zlar:</b> {words_learned} ta
+💎 <b>Status:</b> {"Premium" if is_premium else "Oddiy"}
+👥 <b>Referrallar:</b> {referral_count}/10
 
-🎯 <b>SIZNING HOLATINGIZ:</b>
-• Hozir: {referral_count}/10 referral
-• Qolgan: {remaining_referrals} ta 
-• Tejash imkoniyati: {50000 if remaining_referrals == 0 else 0:,} som
+📈 <b>O'sish dinamikasi:</b>
+• Har sessiya: +2 ball
+• Har test: +5 ball  
+• AI suhbat: +1.5 ball/xabar
+• Quiz yechish: +3 ball
 
-🚀 <b>QANDAY TEZKOR TO'PLASH:</b>
+🎯 <b>Keyingi maqsad:</b>
+{"Premium imkoniyatlardan foydalaning!" if is_premium else f"{10-referral_count} ta referral qoldi = Premium!"}"""
 
-📱 <b>Telegram strategiya:</b>
-• Do'stlar/qarindoshlar guruhida ulashing
-• Til o'rganish guruhlariga tashlang
-• Shaxsiy chatda yuboringFacebookda ulashing
-• WhatsApp status qo'ying
+        await callback.message.edit_text(
+            stats_text,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="👥 Referral dasturi", callback_data="referral_program")] if not is_premium else [],
+                [InlineKeyboardButton(text="🔙 Orqaga", callback_data="premium")]
+            ]),
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        print(f"Error showing statistics: {e}")
+        await callback.answer("Statistika yuklanmoqda...")
+    
+    await callback.answer()
 
-🎭 <b>Tavsiya mat
+@router.callback_query(F.data == "ai_conversation")
+async def handle_ai_conversation(callback: CallbackQuery):
+    if not callback.message or not callback.from_user:
+        await callback.answer("Xatolik!")
+        return
+        
+    user_id = callback.from_user.id
+    user_stats = await get_user_stats(user_id)
+    
+    if not user_stats:
+        await callback.answer("❌ Foydalanuvchi ma'lumotlari topilmadi!")
+        return
+    
+    # Check premium status
+    is_premium = user_stats[4] if len(user_stats) > 4 else False
+    
+    if not is_premium:
+        try:
+            await callback.message.edit_text(
+                "🤖 <b>AI Suhbat - Premium Xizmat</b>\n\n"
+                "🌟 <b>Premium AI bilan suhbat:</b>\n"
+                "• Korean va Japanese AI chat\n"
+                "• 12,000+ so'z lug'ati\n"
+                "• Real-time conversation\n"
+                "• Har xabar uchun +1.5 reyting\n\n"
+                "💎 <b>Premium kerak:</b>\n"
+                "• 50,000 som/oy\n"
+                "• Yoki 10 referral = bepul\n\n"
+                "🚀 Premium oling va AI bilan suhbatlashing!",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="💎 Premium olish", callback_data="premium")],
+                    [InlineKeyboardButton(text="👥 Referral", callback_data="referral_program")],
+                    [InlineKeyboardButton(text="🔙 Orqaga", callback_data="main_menu")]
+                ]),
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            print(f"Error editing AI conversation message: {e}")
+    else:
+        # Premium user - show AI chat options
+        try:
+            await callback.message.edit_text(
+                "🤖 <b>AI Suhbat Tanlash</b>\n\n"
+                "Qaysi til bilan suhbatlashmoqchisiz?\n\n"
+                "🇰🇷 <b>Korean AI:</b> Koreys tili o'rganish\n"
+                "🇯🇵 <b>Japanese AI:</b> Yapon tili o'rganish\n\n"
+                "💡 Har xabar uchun +1.5 reyting ball olasiz!",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🇰🇷 Korean AI", callback_data="korean_conversation")],
+                    [InlineKeyboardButton(text="🇯🇵 Japanese AI", callback_data="japanese_conversation")],
+                    [InlineKeyboardButton(text="💡 Tips", callback_data="conversation_tips")],
+                    [InlineKeyboardButton(text="🔙 Orqaga", callback_data="premium")]
+                ]),
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            print(f"Error editing AI options message: {e}")
+    
+    await callback.answer()
+
+# Additional conversation handlers
+@router.callback_query(F.data == "korean_conversation")
+async def handle_korean_conversation(callback: CallbackQuery):
+    if not callback.message or not callback.from_user:
+        await callback.answer("Xatolik!")
+        return
+    
+    await callback.message.edit_text(
+        "🇰🇷 <b>Korean AI Chat</b>\n\n"
+        "안녕하세요! Korean AI bilan suhbatlashishga tayyor!\n\n"
+        "💬 Menga korean tilida yoki o'zbek tilida yozing\n"
+        "🎯 Har xabar uchun +1.5 reyting ball\n"
+        "📚 12,000+ korean so'z lug'ati\n\n"
+        "Suhbatni boshlash uchun biror narsa yozing:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔙 AI Menyuga", callback_data="ai_conversation")]
+        ]),
+        parse_mode="HTML"
+    )
+    await callback.answer("🇰🇷 Korean AI faollashtirildi!")
+
+@router.callback_query(F.data == "japanese_conversation") 
+async def handle_japanese_conversation(callback: CallbackQuery):
+    if not callback.message or not callback.from_user:
+        await callback.answer("Xatolik!")
+        return
+    
+    await callback.message.edit_text(
+        "🇯🇵 <b>Japanese AI Chat</b>\n\n"
+        "こんにちは! Japanese AI bilan suhbatlashishga tayyor!\n\n"
+        "💬 Menga japanese tilida yoki o'zbek tilida yozing\n"
+        "🎯 Har xabar uchun +1.5 reyting ball\n"
+        "📚 12,000+ japanese so'z lug'ati\n\n"
+        "Suhbatni boshlash uchun biror narsa yozing:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔙 AI Menyuga", callback_data="ai_conversation")]
+        ]),
+        parse_mode="HTML"
+    )
+    await callback.answer("🇯🇵 Japanese AI faollashtirildi!")
+
+@router.callback_query(F.data == "conversation_tips")
+async def handle_conversation_tips(callback: CallbackQuery):
+    if not callback.message or not callback.from_user:
+        await callback.answer("Xatolik!")
+        return
+    
+    await callback.message.edit_text(
+        "💡 <b>AI Suhbat Maslahatlar</b>\n\n"
+        "🎯 <b>Qanday yozish kerak:</b>\n"
+        "• Odatiy savol: \"Salom qalaysiz?\"\n"
+        "• Grammar: \"Nima deb deyiladi?\"\n"
+        "• Tarjima: \"Bu so'z nima degani?\"\n"
+        "• Kultur: \"Korean odatlari haqida\"\n\n"
+        "⭐ <b>AI sizga yordam beradi:</b>\n"
+        "• Pronunciation guide\n"
+        "• Grammar correction\n"
+        "• Cultural context\n"
+        "• Vocabulary expansion\n\n"
+        "🚀 <b>Yaxshi natija uchun:</b>\n"
+        "• To'liq gaplar yozing\n"
+        "• Savol bering\n"
+        "• Amaliyot qiling",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔙 AI Menyuga", callback_data="ai_conversation")]
+        ]),
+        parse_mode="HTML"
+    )
+    await callback.answer()
