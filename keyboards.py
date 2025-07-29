@@ -427,7 +427,7 @@ def get_premium_menu(is_premium: bool = False, can_activate_by_referral: bool = 
     else:
         buttons = [
             [
-                InlineKeyboardButton(text="💳 Premium sotib olish", callback_data="buy_premium")
+                InlineKeyboardButton(text="💳 Premium sotib olish", callback_data="premium_purchase")
             ],
             [
                 InlineKeyboardButton(text="👥 Do'stlarni taklif qilish", callback_data="referral_premium")
@@ -460,7 +460,7 @@ def get_referral_keyboard():
             InlineKeyboardButton(text="👥 Mening referrallarim", callback_data="my_referrals")
         ],
         [
-            InlineKeyboardButton(text="💳 To'lov qilish", callback_data="buy_premium")
+            InlineKeyboardButton(text="💳 To'lov qilish", callback_data="premium_purchase")
         ],
         [
             InlineKeyboardButton(text="📞 Admin bilan bog'lanish", url="https://t.me/chang_chi_won")
