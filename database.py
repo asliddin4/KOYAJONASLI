@@ -432,10 +432,10 @@ async def get_user_rating_details(user_id: int) -> dict:
     user_stats = await get_user_stats(user_id)
     if user_stats:
         return {
-            'rating': user_stats[4] or 0.0,
-            'sessions': user_stats[2] or 0,
-            'words_learned': user_stats[3] or 0,
-            'referrals': user_stats[5] or 0
+            'rating': user_stats[1] or 0.0,  # rating_score
+            'sessions': user_stats[2] or 0,   # total_sessions
+            'words_learned': user_stats[3] or 0,  # words_learned
+            'referrals': user_stats[5] or 0   # referral_count
         }
     return {'rating': 0.0, 'sessions': 0, 'words_learned': 0, 'referrals': 0}
 
@@ -667,6 +667,86 @@ async def get_all_user_ids() -> List[int]:
         cursor = await db.execute("SELECT user_id FROM users")
         results = await cursor.fetchall()
         return [row[0] for row in results]
+
+async def get_user_stats(user_id: int) -> dict:
+    """Get user statistics"""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute("""
+            SELECT rating_score, total_sessions, words_learned, quiz_score_total, quiz_attempts, is_premium, referral_count
+            FROM users WHERE user_id = ?
+        """, (user_id,))
+        result = await cursor.fetchone()
+        
+        if not result:
+            return {
+                'rating_score': 0.0,
+                'total_sessions': 0,
+                'words_learned': 0,
+                'quiz_score_total': 0,
+                'quiz_attempts': 0,
+                'is_premium': False,
+                'referral_count': 0
+            }
+        
+        return {
+            'rating_score': result[0] or 0.0,
+            'total_sessions': result[1] or 0,
+            'words_learned': result[2] or 0,
+            'quiz_score_total': result[3] or 0,
+            'quiz_attempts': result[4] or 0,
+            'is_premium': result[5] or False,
+            'referral_count': result[6] or 0
+        }
+
+async def get_referral_stats(user_id: int) -> dict:
+    """Get referral statistics"""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        # Count total referrals by this user
+        cursor = await db.execute("""
+            SELECT COUNT(*) FROM users WHERE referred_by = ?
+        """, (user_id,))
+        total_referrals = (await cursor.fetchone())[0]
+        
+        # Count active referrals (users who are still active)
+        cursor = await db.execute("""
+            SELECT COUNT(*) FROM users 
+            WHERE referred_by = ? AND last_activity > datetime('now', '-30 days')
+        """, (user_id,))
+        active_referrals = (await cursor.fetchone())[0]
+        
+        return {
+            'total_referrals': total_referrals,
+            'active_referrals': active_referrals
+        }
+
+async def update_user_rating(user_id: int, action_type: str) -> None:
+    """Update user rating based on action type"""
+    rating_points = {
+        'session_start': 2,
+        'quiz_completed': 5,
+        'ai_conversation': 1.5,
+        'test_completed': 10,
+        'content_viewed': 1
+    }
+    
+    points = rating_points.get(action_type, 0)
+    if points > 0:
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            await db.execute("""
+                UPDATE users 
+                SET rating_score = rating_score + ?
+                WHERE user_id = ?
+            """, (points, user_id))
+            await db.commit()
+
+async def add_referral(referrer_id: int, referred_id: int) -> None:
+    """Add referral record"""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("""
+            INSERT OR IGNORE INTO referrals (referrer_id, referred_id)
+            VALUES (?, ?)
+        """, (referrer_id, referred_id))
+        await db.commit()
 
 async def get_admin_statistics() -> dict:
     """Get comprehensive admin statistics"""
