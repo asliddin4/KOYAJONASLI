@@ -470,7 +470,7 @@ async def handle_my_rewards(callback: CallbackQuery):
 
 📊 <b>JORIY HOLAT:</b>
 • Referral hisobi: {referral_count}/10
-• Premium status: {'✅ Faol' if is_premium else '❌ Yo\'q'}"""
+• Premium status: {'✅ Faol' if is_premium else '❌ Yoq'}"""
 
     if is_premium and premium_expires:
         rewards_text += f"\n• Premium tugashi: {premium_expires.split()[0]}"
@@ -623,11 +623,65 @@ async def handle_send_payment_proof(callback: CallbackQuery):
     
     await callback.answer()
 
-@router.callback_query(F.data.startswith("referral_info"))
+@router.callback_query(F.data == "referral_info")
 async def handle_referral_info(callback: CallbackQuery):
-    await callback.answer("ℹ️ Ma'lumot yuklanmoqda...")
+    if not callback.message or not callback.from_user:
+        await callback.answer("Xatolik!")
+        return
+        
+    user_id = callback.from_user.id
+    user_stats = await get_user_stats(user_id)
+    referral_count = user_stats[5] if user_stats and len(user_stats) > 5 else 0
+    remaining_referrals = max(0, 10 - referral_count)
+    
+    info_text = f"""ℹ️ <b>REFERRAL DASTURI MA'LUMOT</b>
 
-@router.callback_query(F.data.startswith("rating"))
+💰 <b>QIYMAT HISOB-KITOBI:</b>
+• Premium narx: 50,000 som/oy  
+• 10 referral = BEPUL 1 oy
+• Sizning tejashingiz: 50,000 som!
+
+🎯 <b>SIZNING HOLATINGIZ:</b>
+• Hozir: {referral_count}/10 referral
+• Qolgan: {remaining_referrals} ta 
+• Tejash imkoniyati: {50000 if remaining_referrals == 0 else 0:,} som
+
+🚀 <b>TEZKOR TO'PLASH USULLARI:</b>
+
+📱 <b>Telegram:</b>
+• Do'stlar/qarindoshlar guruhida ulashing
+• Til o'rganish guruhlariga tashlang
+• Shaxsiy chatda yuboring
+
+🌐 <b>Social Media:</b>
+• Instagram story/post
+• Facebook ulashing
+• WhatsApp status
+
+🎭 <b>Tavsiya matni:</b>
+"Men koreys/yapon tili o'rganaman va juda yaxshi natija berib turibdi! Sizga ham tavsiya qilaman - bepul boshlash mumkin!"
+
+💡 <b>Pro maslahat:</b>
+Guruhlarda faol bo'ling, foydali kontent ulashing, keyin taklifingizni qo'shing."""
+
+    info_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📋 Havolani olish", callback_data="copy_referral_link")],
+        [InlineKeyboardButton(text="📊 Mening statistikam", callback_data="referral_stats")],
+        [InlineKeyboardButton(text="🔙 Orqaga", callback_data="premium")]
+    ])
+    
+    try:
+        await callback.message.edit_text(
+            info_text,
+            reply_markup=info_keyboard,
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        print(f"Error editing referral info message: {e}")
+    
+    await callback.answer()
+
+@router.callback_query(F.data == "rating")
 async def handle_rating(callback: CallbackQuery):
     if not callback.message or not callback.from_user:
         await callback.answer("Xatolik!")
@@ -663,12 +717,14 @@ async def handle_rating(callback: CallbackQuery):
 🎯 <b>Keyingi maqsad:</b>
 {"Premium imkoniyatlardan foydalaning!" if is_premium else f"{10-referral_count} ta referral qoldi = Premium!"}"""
 
+        stats_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="👥 Referral dasturi", callback_data="referral_program")] if not is_premium else [],
+            [InlineKeyboardButton(text="🔙 Orqaga", callback_data="premium")]
+        ])
+
         await callback.message.edit_text(
             stats_text,
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="👥 Referral dasturi", callback_data="referral_program")] if not is_premium else [],
-                [InlineKeyboardButton(text="🔙 Orqaga", callback_data="premium")]
-            ]),
+            reply_markup=stats_keyboard,
             parse_mode="HTML"
         )
     except Exception as e:
@@ -677,7 +733,7 @@ async def handle_rating(callback: CallbackQuery):
     
     await callback.answer()
 
-@router.callback_query(F.data == "ai_conversation")
+@router.callback_query(F.data == "conversation")
 async def handle_ai_conversation(callback: CallbackQuery):
     if not callback.message or not callback.from_user:
         await callback.answer("Xatolik!")
@@ -703,37 +759,41 @@ async def handle_ai_conversation(callback: CallbackQuery):
                 "• Real-time conversation\n"
                 "• Har xabar uchun +1.5 reyting\n\n"
                 "💎 <b>Premium kerak:</b>\n"
-                "• 50,000 som/oy\n"
-                "• Yoki 10 referral = bepul\n\n"
-                "🚀 Premium oling va AI bilan suhbatlashing!",
+                "50,000 som/oy yoki 10 referral\n\n"
+                "🎯 <b>Premium oling va AI bilan suhbatlashing!</b>",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="💎 Premium olish", callback_data="premium")],
-                    [InlineKeyboardButton(text="👥 Referral", callback_data="referral_program")],
-                    [InlineKeyboardButton(text="🔙 Orqaga", callback_data="main_menu")]
-                ]),
-                parse_mode="HTML"
-            )
-        except Exception as e:
-            print(f"Error editing AI conversation message: {e}")
-    else:
-        # Premium user - show AI chat options
-        try:
-            await callback.message.edit_text(
-                "🤖 <b>AI Suhbat Tanlash</b>\n\n"
-                "Qaysi til bilan suhbatlashmoqchisiz?\n\n"
-                "🇰🇷 <b>Korean AI:</b> Koreys tili o'rganish\n"
-                "🇯🇵 <b>Japanese AI:</b> Yapon tili o'rganish\n\n"
-                "💡 Har xabar uchun +1.5 reyting ball olasiz!",
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="🇰🇷 Korean AI", callback_data="korean_conversation")],
-                    [InlineKeyboardButton(text="🇯🇵 Japanese AI", callback_data="japanese_conversation")],
-                    [InlineKeyboardButton(text="💡 Tips", callback_data="conversation_tips")],
+                    [InlineKeyboardButton(text="💳 Premium sotib olish", callback_data="premium_purchase")],
+                    [InlineKeyboardButton(text="👥 Referral to'plash", callback_data="referral_program")],
                     [InlineKeyboardButton(text="🔙 Orqaga", callback_data="premium")]
                 ]),
                 parse_mode="HTML"
             )
         except Exception as e:
-            print(f"Error editing AI options message: {e}")
+            print(f"Error showing AI conversation premium message: {e}")
+        
+        await callback.answer("💎 Premium kerak!")
+        return
+    
+    # Premium user - show AI conversation options
+    try:
+        await callback.message.edit_text(
+            "🤖 <b>AI SUHBAT - Premium</b>\n\n"
+            "🌟 <b>Til tanlang:</b>\n"
+            "• Korean AI - 12,000+ so'z\n"
+            "• Japanese AI - 12,000+ so'z\n"
+            "• Interactive conversation\n"
+            "• Har xabar +1.5 reyting\n\n"
+            "🚀 <b>Qaysi AI bilan suhbatlashmoqchisiz?</b>",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🇰🇷 Korean AI", callback_data="korean_conversation")],
+                [InlineKeyboardButton(text="🇯🇵 Japanese AI", callback_data="japanese_conversation")],
+                [InlineKeyboardButton(text="💡 Conversation tips", callback_data="conversation_tips")],
+                [InlineKeyboardButton(text="🔙 Orqaga", callback_data="premium")]
+            ]),
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        print(f"Error showing AI conversation options: {e}")
     
     await callback.answer()
 
@@ -805,4 +865,4 @@ async def handle_conversation_tips(callback: CallbackQuery):
         ]),
         parse_mode="HTML"
     )
-    await callback.answer()
+    await callback.answer() 
