@@ -79,12 +79,15 @@ async def show_conversation_menu(callback: CallbackQuery):
                 ]
             ])
             
-            if callback.message:
-                await callback.message.edit_text(
-                    premium_ad_text,
-                    reply_markup=premium_keyboard,
-                    parse_mode="HTML"
-                )
+            try:
+                if callback.message and hasattr(callback.message, 'edit_text'):
+                    await callback.message.edit_text(
+                        premium_ad_text,
+                        reply_markup=premium_keyboard,
+                        parse_mode="HTML"
+                    )
+            except Exception as e:
+                print(f"Error editing premium ad message: {e}")
             await callback.answer()
             return
         
@@ -115,12 +118,15 @@ async def show_conversation_menu(callback: CallbackQuery):
             ]
         ])
         
-        if callback.message:
-            await callback.message.edit_text(
-                ai_menu_text,
-                reply_markup=ai_keyboard,
-                parse_mode="HTML"
-            )
+        try:
+            if callback.message and hasattr(callback.message, 'edit_text'):
+                await callback.message.edit_text(
+                    ai_menu_text,
+                    reply_markup=ai_keyboard,
+                    parse_mode="HTML"
+                )
+        except Exception as e:
+            print(f"Error editing AI menu message: {e}")
         await callback.answer()
         
     except Exception as e:
@@ -161,12 +167,15 @@ Koreyscha nima demoqchisiz? 🇰🇷✨"""
             ]
         ])
         
-        if callback.message:
-            await callback.message.edit_text(
-                welcome_text,
-                reply_markup=exit_keyboard,
-                parse_mode="HTML"
-            )
+        try:
+            if callback.message and hasattr(callback.message, 'edit_text'):
+                await callback.message.edit_text(
+                    welcome_text,
+                    reply_markup=exit_keyboard,
+                    parse_mode="HTML"
+                )
+        except Exception as e:
+            print(f"Error editing Korean welcome message: {e}")
         await callback.answer()
         
     except Exception as e:
@@ -207,12 +216,15 @@ Yaponcha nima demoqchisiz? 🇯🇵✨"""
             ]
         ])
         
-        if callback.message:
-            await callback.message.edit_text(
-                welcome_text,
-                reply_markup=exit_keyboard,
-                parse_mode="HTML"
-            )
+        try:
+            if callback.message and hasattr(callback.message, 'edit_text'):
+                await callback.message.edit_text(
+                    welcome_text,
+                    reply_markup=exit_keyboard,
+                    parse_mode="HTML"
+                )
+        except Exception as e:
+            print(f"Error editing Japanese welcome message: {e}")
         await callback.answer()
         
     except Exception as e:
@@ -243,10 +255,10 @@ async def handle_korean_conversation(message: Message, state: FSMContext):
         await asyncio.sleep(1)  # Thinking delay
         
         # AI javob olish
-        ai_response = await korean_ai.generate_response(user_message, user_id)
+        ai_response = await get_korean_response(user_message, user_id)
         
         # Reyting yangilash (+1.5 ball)
-        await update_user_rating(user_id, 1.5)
+        await update_user_rating(user_id, 'ai_conversation')
         
         # Exit keyboard
         exit_keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -289,10 +301,10 @@ async def handle_japanese_conversation(message: Message, state: FSMContext):
         await asyncio.sleep(1)  # Thinking delay
         
         # AI javob olish
-        ai_response = await japanese_ai.generate_response(user_message, user_id)
+        ai_response = await get_japanese_response(user_message, user_id)
         
         # Reyting yangilash (+1.5 ball)
-        await update_user_rating(user_id, 1.5)
+        await update_user_rating(user_id, 'ai_conversation')
         
         # Exit keyboard
         exit_keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -333,12 +345,15 @@ Yana AI bilan suhbatlashish uchun "🤖 AI bilan suhbat" tugmasini bosing!"""
         from config import ADMIN_ID
         main_keyboard = get_main_menu(callback.from_user.id == ADMIN_ID)
         
-        if callback.message:
-            await callback.message.edit_text(
-                end_text,
-                reply_markup=main_keyboard,
-                parse_mode="HTML"
-            )
+        try:
+            if callback.message and hasattr(callback.message, 'edit_text'):
+                await callback.message.edit_text(
+                    end_text,
+                    reply_markup=main_keyboard,
+                    parse_mode="HTML"
+                )
+        except Exception as e:
+            print(f"Error editing end conversation message: {e}")
         await callback.answer("✅ Suhbat tugadi!")
         
     except Exception as e:
@@ -387,5 +402,9 @@ async def show_conversation_tips(callback: CallbackQuery):
         ]
     ])
     
-    await callback.message.edit_text(tips_text, reply_markup=keyboard)
+    try:
+        if callback.message and hasattr(callback.message, 'edit_text'):
+            await callback.message.edit_text(tips_text, reply_markup=keyboard, parse_mode="HTML")
+    except Exception as e:
+        print(f"Error editing conversation tips message: {e}")
     await callback.answer()
