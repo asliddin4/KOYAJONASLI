@@ -235,7 +235,7 @@ async def premium_menu(callback: CallbackQuery):
 • 📈 Kengaytirilgan statistika"""
         
         premium_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🤖 AI Suhbat", callback_data="ai_conversation")],
+            [InlineKeyboardButton(text="🤖 AI Suhbat", callback_data="conversation")],
             [InlineKeyboardButton(text="👥 Referral dasturi", callback_data="referral_program")],
             [InlineKeyboardButton(text="📊 Statistika", callback_data="rating")],
             [InlineKeyboardButton(text="🔙 Orqaga", callback_data="main_menu")]
@@ -328,31 +328,332 @@ async def handle_referral_program(callback: CallbackQuery):
     
     await callback.answer()
 
-# Minimal handlers for other callbacks
-@router.callback_query(F.data.startswith("copy_referral_link"))
+@router.callback_query(F.data == "copy_referral_link")
 async def handle_copy_referral_link(callback: CallbackQuery):
-    await callback.answer("📋 Havola nusxalandi! Ulashing!", show_alert=True)
+    """Referral havolasini ko'rsatish"""
+    if not callback.message or not callback.from_user:
+        await callback.answer("Xatolik!")
+        return
+        
+    user_id = callback.from_user.id
+    referral_link = f"https://t.me/KoreYap_ProGradBot?start=ref_{user_id}"
+    
+    copy_text = f"""📋 <b>SIZNING REFERRAL HAVOLANGIZ:</b>
 
-@router.callback_query(F.data.startswith("referral_stats"))
+<code>{referral_link}</code>
+
+🚀 <b>ULASHISH YO'LLARI:</b>
+
+📱 <b>Telegram:</b>
+• Do'stlar bilan shaxsiy chat
+• Familiya guruhlari  
+• Til o'rganuvchi guruhlar
+
+🌐 <b>Ijtimoiy tarmoqlar:</b>
+• Instagram story/post
+• Facebook ulashish
+• TikTok bio/comment
+
+💡 <b>Maslahat:</b> "Men koreys/yapon tili o'rganaman. Sizga ham tavsiya qilaman!" deb yozing va havolani qo'shing.
+
+🎯 <b>Har yangi a'zo = +1 referral</b>
+💎 <b>10 referral = 30 kun BEPUL Premium!</b>"""
+
+    copy_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔙 Referral menu", callback_data="referral_program")]
+    ])
+    
+    try:
+        await callback.message.edit_text(
+            copy_text,
+            reply_markup=copy_keyboard,
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        print(f"Error editing copy referral message: {e}")
+    
+    await callback.answer("📋 Havola tayyor! Nusxalang va ulashing!", show_alert=True)
+
+@router.callback_query(F.data == "referral_stats")
 async def handle_referral_stats(callback: CallbackQuery):
-    await callback.answer("📊 Statistika yuklanmoqda...")
+    """Referral statistikasini ko'rsatish"""
+    if not callback.message or not callback.from_user:
+        await callback.answer("Xatolik!")
+        return
+        
+    user_id = callback.from_user.id
+    user_stats = await get_user_stats(user_id)
+    
+    if not user_stats:
+        await callback.answer("❌ Ma'lumot topilmadi!")
+        return
+    
+    referral_count = user_stats[5] if len(user_stats) > 5 else 0
+    remaining = max(0, 10 - referral_count)
+    progress_bar = "█" * referral_count + "░" * remaining
+    
+    # Get detailed referral info
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute("""
+            SELECT r.referred_id, u.first_name, r.created_at 
+            FROM referrals r 
+            LEFT JOIN users u ON r.referred_id = u.user_id 
+            WHERE r.referrer_id = ? 
+            ORDER BY r.created_at DESC 
+            LIMIT 10
+        """, (user_id,))
+        referrals = await cursor.fetchall()
+    
+    stats_text = f"""📊 <b>REFERRAL STATISTIKA</b>
 
-@router.callback_query(F.data.startswith("my_rewards"))
+🎯 <b>SIZNING NATIJALRINGIZ:</b>
+• Umumiy referrallar: {referral_count}/10
+• Qolgan: {remaining} ta
+• Progress: {progress_bar}
+
+📈 <b>MUKOFOT HISOBI:</b>
+• Hozirgi sikl: {referral_count}/10
+• Keyingi premium: {remaining} ta qoldi
+• Maqsad: 50,000 som tejash
+
+👥 <b>OXIRGI REFERRALLAR:</b>"""
+    
+    if referrals:
+        for i, (ref_id, name, created_at) in enumerate(referrals[:5], 1):
+            user_name = name or "Anonim"
+            date = created_at.split()[0] if created_at else "Noma'lum"
+            stats_text += f"\n{i}. {user_name} - {date}"
+    else:
+        stats_text += "\nHali referrallar yo'q"
+    
+    stats_text += f"""
+
+💡 <b>KEYINGI QADAM:</b>
+Yana {remaining} kishi taklif qiling va 30 kunlik BEPUL Premium oling!"""
+
+    stats_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📋 Havola nusxalash", callback_data="copy_referral_link")],
+        [InlineKeyboardButton(text="🔙 Referral menu", callback_data="referral_program")]
+    ])
+    
+    try:
+        await callback.message.edit_text(
+            stats_text,
+            reply_markup=stats_keyboard,
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        print(f"Error editing referral stats message: {e}")
+    
+    await callback.answer()
+
+@router.callback_query(F.data == "my_rewards")
 async def handle_my_rewards(callback: CallbackQuery):
-    await callback.answer("🎁 Mukofotlar ko'rsatilmoqda...")
+    """Foydalanuvchi mukofotlarini ko'rsatish"""
+    if not callback.message or not callback.from_user:
+        await callback.answer("Xatolik!")
+        return
+        
+    user_id = callback.from_user.id
+    user_stats = await get_user_stats(user_id)
+    
+    if not user_stats:
+        await callback.answer("❌ Ma'lumot topilmadi!")
+        return
+    
+    referral_count = user_stats[5] if len(user_stats) > 5 else 0
+    is_premium = user_stats[4] if len(user_stats) > 4 else False
+    premium_expires = user_stats[6] if len(user_stats) > 6 else None
+    
+    rewards_text = f"""🎁 <b>SIZNING MUKOFOTLARINGIZ</b>
 
-@router.callback_query(F.data.startswith("premium_purchase"))
+📊 <b>JORIY HOLAT:</b>
+• Referral hisobi: {referral_count}/10
+• Premium status: {'✅ Faol' if is_premium else '❌ Yo\'q'}"""
+
+    if is_premium and premium_expires:
+        rewards_text += f"\n• Premium tugashi: {premium_expires.split()[0]}"
+    
+    rewards_text += f"""
+
+🏆 <b>OLGAN MUKOFOTLAR:</b>"""
+    
+    # Calculate completed cycles (how many times user got 10 referrals)
+    completed_cycles = referral_count // 10 if referral_count >= 10 else 0
+    if is_premium:
+        completed_cycles += 1  # Current premium
+    
+    if completed_cycles > 0:
+        rewards_text += f"\n✅ {completed_cycles} marta 30 kunlik Premium olgan"
+        rewards_text += f"\n💰 Jami tejagan: {completed_cycles * 50000:,} som"
+    else:
+        rewards_text += "\nHali mukofotlar yo'q"
+    
+    remaining = max(0, 10 - (referral_count % 10))
+    rewards_text += f"""
+
+🎯 <b>KEYINGI MUKOFOT:</b>
+• Qolgan referrallar: {remaining}/10
+• Keyingi mukofot: 30 kun Premium (50,000 som)
+• Foiz: {((referral_count % 10) / 10 * 100):.0f}%
+
+🚀 <b>MOTIVATSIYA:</b>
+Har yangi referral sizni premium mukofotga yaqinlashtiradi!"""
+
+    rewards_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="👥 Referral to'plash", callback_data="copy_referral_link")],
+        [InlineKeyboardButton(text="📊 Statistika", callback_data="referral_stats")],
+        [InlineKeyboardButton(text="🔙 Referral menu", callback_data="referral_program")]
+    ])
+    
+    try:
+        await callback.message.edit_text(
+            rewards_text,
+            reply_markup=rewards_keyboard,
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        print(f"Error editing rewards message: {e}")
+    
+    await callback.answer()
+
+@router.callback_query(F.data == "premium_purchase")
 async def handle_premium_purchase(callback: CallbackQuery):
-    await callback.answer("💳 To'lov tizimi...")
+    if not callback.message or not callback.from_user:
+        await callback.answer("Xatolik!")
+        return
+        
+    user_id = callback.from_user.id
+    username = callback.from_user.username or "user"
+    
+    purchase_text = f"""💎 <b>PREMIUM SOTIB OLISH</b>
 
-@router.callback_query(F.data.startswith("referral_info"))
+🌟 <b>PREMIUM IMKONIYATLARI:</b>
+• AI Suhbat (Korean & Japanese)
+• JLPT testlar (N5-N1)
+• Premium kontentlar
+• Reklama yo'q
+• Prioritet yordam
+
+💰 <b>NARX:</b> 50,000 som (30 kun)
+📊 <b>Kuniga:</b> 1,667 som
+
+💳 <b>TO'LOV USULLARI:</b>
+
+🏦 <b>Karta orqali:</b>
+<code>4278 3100 2775 4068</code>
+Xoshimjon Mamadiyev
+(Kapital Bank Visa)
+
+📱 <b>Elektron to'lovlar:</b>
+• Click/Payme: +998917754441
+• Humo/Uzcard: 8600 4954 7441 7777
+
+💸 <b>Naqd pul:</b>
+Janubiy Koreya, Seul/Inchon
+@Chang_chi_won admin bilan bog'laning
+
+⚠️ <b>MUHIM:</b> To'lovdan keyin skrinshot yuboring!"""
+
+    purchase_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💳 Karta ma'lumotini nusxalash", callback_data="copy_card_info")],
+        [InlineKeyboardButton(text="📱 Click/Payme raqam", callback_data="copy_click_number")],
+        [InlineKeyboardButton(text="💸 Humo/Uzcard raqam", callback_data="copy_humo_number")],
+        [InlineKeyboardButton(text="📸 To'lov tasdiqini yuborish", callback_data="send_payment_proof")],
+        [InlineKeyboardButton(text="👨‍💼 Admin bilan bog'lanish", url="https://t.me/Chang_chi_won")],
+        [InlineKeyboardButton(text="🔙 Orqaga", callback_data="premium")]
+    ])
+    
+    try:
+        await callback.message.edit_text(
+            purchase_text,
+            reply_markup=purchase_keyboard,
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        print(f"Error showing premium purchase: {e}")
+    
+    await callback.answer()
+
+@router.callback_query(F.data == "copy_card_info")
+async def handle_copy_card_info(callback: CallbackQuery):
+    await callback.answer("💳 Karta ma'lumoti nusxalandi:\n4278 3100 2775 4068\nXoshimjon Mamadiyev", show_alert=True)
+
+@router.callback_query(F.data == "copy_click_number")
+async def handle_copy_click_number(callback: CallbackQuery):
+    await callback.answer("📱 Click/Payme raqam nusxalandi:\n+998917754441", show_alert=True)
+
+@router.callback_query(F.data == "copy_humo_number")
+async def handle_copy_humo_number(callback: CallbackQuery):
+    await callback.answer("💸 Humo/Uzcard raqam nusxalandi:\n8600 4954 7441 7777", show_alert=True)
+
+@router.callback_query(F.data == "send_payment_proof")
+async def handle_send_payment_proof(callback: CallbackQuery):
+    if not callback.message or not callback.from_user:
+        await callback.answer("Xatolik!")
+        return
+    
+    proof_text = """📸 <b>TO'LOV TASDIQINI YUBORISH</b>
+
+📋 <b>Qanday yuborish:</b>
+1. To'lov skrinshot tayyorlang
+2. @Chang_chi_won admin ga yuboring
+3. Username va ID ni ham yuboring
+
+⏰ <b>Qayta ishlash vaqti:</b>
+• Oddiy holatlarda: 1-24 soat
+• Dam kunlari: 48 soat gacha
+
+✅ <b>Tasdiqlangandan keyin:</b>
+• Premium faollashadi
+• Barcha premium funksiyalar ochiladi
+• Tasdiqnoma xabari keladi"""
+    
+    proof_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="👨‍💼 Admin bilan bog'lanish", url="https://t.me/Chang_chi_won")],
+        [InlineKeyboardButton(text="🔙 To'lov", callback_data="premium_purchase")]
+    ])
+    
+    try:
+        await callback.message.edit_text(
+            proof_text,
+            reply_markup=proof_keyboard,
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        print(f"Error editing payment proof message: {e}")
+    
+    await callback.answer()
+
+@router.callback_query(F.data == "referral_info")
 async def handle_referral_info(callback: CallbackQuery):
-    await callback.answer("ℹ️ Ma'lumot yuklanmoqda...")
+    if not callback.message or not callback.from_user:
+        await callback.answer("Xatolik!")
+        return
+        
+    user_id = callback.from_user.id
+    user_stats = await get_user_stats(user_id)
+    referral_count = user_stats[5] if user_stats and len(user_stats) > 5 else 0
+    remaining_referrals = max(0, 10 - referral_count)
+    
+    info_text = f"""ℹ️ <b>REFERRAL DASTURI MA'LUMOT</b>
 
-@router.callback_query(F.data.startswith("rating"))
-async def handle_rating(callback: CallbackQuery):
-    await callback.answer("📊 Statistika...")
+💰 <b>QIYMAT HISOB-KITOBI:</b>
+• Premium narx: 50,000 som/oy  
+• 10 referral = BEPUL 1 oy
+• Sizning tejashingiz: 50,000 som!
 
-@router.callback_query(F.data.startswith("ai_conversation"))
-async def handle_ai_conversation(callback: CallbackQuery):
-    await callback.answer("🤖 AI suhbat...")
+🎯 <b>SIZNING HOLATINGIZ:</b>
+• Hozir: {referral_count}/10 referral
+• Qolgan: {remaining_referrals} ta 
+• Tejash imkoniyati: {50000 if remaining_referrals == 0 else 0:,} som
+
+🚀 <b>QANDAY TEZKOR TO'PLASH:</b>
+
+📱 <b>Telegram strategiya:</b>
+• Do'stlar/qarindoshlar guruhida ulashing
+• Til o'rganish guruhlariga tashlang
+• Shaxsiy chatda yuboringFacebookda ulashing
+• WhatsApp status qo'ying
+
+🎭 <b>Tavsiya mat
